@@ -1,4 +1,3 @@
-#Chess Project X
 Chess Project X is a custom chess engine and gaming platform developed in Python using the Pygame library. The project combines classic board game mechanics with modern machine learning methods.
 
 Main concept
