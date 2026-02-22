@@ -1,10 +1,13 @@
 import pygame
+from src.engine.chess_engine import GameState
 from src import config
 
 class BoardRenderer:
     def __init__(self, screen, font):
         self.screen = screen
         self.font = font
+        self.piece_images = {}
+        self.load_piece_images()
 
         light_img = self.light_cell = pygame.image.load(config.CELL_PATH + "square_brown_light.png")
         dark_img = self.dark_cell = pygame.image.load(config.CELL_PATH + "square_brown_dark.png")
@@ -38,6 +41,23 @@ class BoardRenderer:
             text_rect = num.get_rect(center=(x_pos, y_pos))
             self.screen.blit(num, text_rect)
 
+    def load_piece_images(self):
+        pieces = ["w_pawn", "w_rook", "w_knight", "w_bishop", "w_queen", "w_king",
+                "b_pawn", "b_rook", "b_knight", "b_bishop", "b_queen", "b_king"]
+        for piece in pieces:
+            img = pygame.image.load(config.PIECES_PATH + piece + "_png_128px.png")
+            self.piece_images[piece] = pygame.transform.scale(img, (config.PIECE_SIZE, config.PIECE_SIZE))
+
+    def draw_pieces(self, game_state):
+        for row in range(config.ROWS):
+            for col in range(config.COLS):
+                piece = game_state.board[row][col]
+                if piece != "--":
+                    x = config.ORIGIN_X + (col * config.CELL_SIZE) + config.OFFSET
+                    y = config.ORIGIN_Y + (row * config.CELL_SIZE) + config.OFFSET
+                    self.screen.blit(self.piece_images[piece], (x, y))
+
     def render(self):
         self.draw_board()
         self.draw_coordinates()
+        self.draw_pieces(GameState())
