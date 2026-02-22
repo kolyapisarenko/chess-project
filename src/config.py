@@ -1,0 +1,25 @@
+#Screen
+SCREEN_WIDTH = 1280
+SCREEN_HEIGHT = 720
+FPS = 60
+
+#Board
+ROWS = 8
+COLS = 8
+CELL_SIZE = 80
+BOARD_SIZE = CELL_SIZE * ROWS
+
+#Positioning
+ORIGIN_X = (SCREEN_WIDTH - BOARD_SIZE) // 2
+ORIGIN_Y = (SCREEN_HEIGHT - BOARD_SIZE) // 2
+
+#Assets
+ASSETS_PATH = "assets/"
+IMAGE_PATH = ASSETS_PATH + "images/"
+SOUND_PATH = ASSETS_PATH + "sounds/"
+PIECES_PATH = IMAGE_PATH + "pieces/"
+CELL_PATH = IMAGE_PATH + "board/"
+
+#General
+TITLE = "Chess Project X"
+BG_COLOR = (40, 44, 52)
