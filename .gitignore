@@ -1,0 +1,13 @@
+#Virtual environment
+chess_project_venv/
+env/
+venv/
+
+#Python cache files
+**/__pycache__/
+*.py[cod]
+*$py.class
+
+#IDE files
+.vscode/
+.idea/
