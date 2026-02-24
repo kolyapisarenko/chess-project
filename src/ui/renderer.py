@@ -1,5 +1,4 @@
 import pygame
-from src.engine.chess_engine import GameState
 from src import config
 
 class BoardRenderer:
@@ -57,7 +56,18 @@ class BoardRenderer:
                     y = config.ORIGIN_Y + (row * config.CELL_SIZE) + config.OFFSET
                     self.screen.blit(self.piece_images[piece], (x, y))
 
-    def render(self):
+    def _draw_selected_square(self, selected_square):
+        if len(selected_square) == 2:
+            row, col = selected_square
+            x = config.ORIGIN_X + (col * config.CELL_SIZE)
+            y = config.ORIGIN_Y + (row * config.CELL_SIZE)
+            highlight = pygame.Surface((config.CELL_SIZE, config.CELL_SIZE))
+            highlight.fill(config.HIGHLIGHT_COLOR)
+            highlight.set_alpha(100)
+            self.screen.blit(highlight, (x, y))
+
+    def render(self, game_state, selected_square):
         self.draw_board()
         self.draw_coordinates()
-        self.draw_pieces(GameState())
+        self._draw_selected_square(selected_square)
+        self.draw_pieces(game_state)
