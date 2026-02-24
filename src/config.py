@@ -27,3 +27,4 @@ CELL_PATH = IMAGE_PATH + "board/"
 #General
 TITLE = "Chess Project X"
 BG_COLOR = (40, 44, 52)
+HIGHLIGHT_COLOR = (173, 216, 230)
