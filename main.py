@@ -50,9 +50,23 @@ def main():
                                 gs.make_move(move)
                                 move_made = True
                                 if move.piece_captured != "--":
-                                    pygame.mixer.Sound(config.SOUND_PATH + "capture.wav").play()
+                                    move_sound = pygame.mixer.Sound(config.SOUND_PATH + "capture.wav")
                                 else:
-                                    pygame.mixer.Sound(config.SOUND_PATH + "move-self.wav").play()
+                                    move_sound = pygame.mixer.Sound(config.SOUND_PATH + "move-self.wav")
+                                
+                                temp_valid_moves = gs.get_valid_moves()
+
+                                if gs.checkmate:
+                                    pygame.mixer.Sound(config.SOUND_PATH + "move-check.wav").play()
+                                    pygame.mixer.Sound(config.SOUND_PATH + "game-over.wav").play()
+                                elif gs.stealmate:
+                                    move_sound.play()
+                                    pygame.mixer.Sound(config.SOUND_PATH + "game-over.wav").play()
+                                elif gs.in_check():
+                                    pygame.mixer.Sound(config.SOUND_PATH + "move-check.wav").play()
+                                else:
+                                    move_sound.play()
+
                                 selected_square = ()
                                 player_clicks = []
                             else:
