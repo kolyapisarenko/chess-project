@@ -17,6 +17,8 @@ def main():
     selected_square = ()
 
     gs = GameState()
+    valid_moves = gs.get_valid_moves()
+    move_made = False
 
     running = True
     while running:
@@ -44,12 +46,28 @@ def main():
                                 player_clicks = []                            
                         if len(player_clicks) == 2:
                             move = Move(player_clicks[0], player_clicks[1], gs.board)
-                            gs.make_move(move)
-                            pygame.mixer.Sound(config.SOUND_PATH + "move-self.wav").play()
-                            selected_square = ()
-                            player_clicks = []
+                            if move in valid_moves:
+                                gs.make_move(move)
+                                move_made = True
+                                if move.piece_captured != "--":
+                                    pygame.mixer.Sound(config.SOUND_PATH + "capture.wav").play()
+                                else:
+                                    pygame.mixer.Sound(config.SOUND_PATH + "move-self.wav").play()
+                                selected_square = ()
+                                player_clicks = []
+                            else:
+                                if color == gs.white_to_move:
+                                    selected_square = (row, col)
+                                    player_clicks = [selected_square]
+                                else:
+                                    selected_square = ()
+                                    player_clicks = []
                 else:
                     pass
+        
+        if move_made:
+            valid_moves = gs.get_valid_moves()
+            move_made = False
 
         screen.fill(config.BG_COLOR)
         renderer.render(gs, selected_square)
