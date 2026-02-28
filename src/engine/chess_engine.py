@@ -19,23 +19,34 @@ class GameState:
         self.checkmate = False
         self.stealmate = False
         self.position_history = []
+        self.enpassant_possible = ()
 
     def make_move(self, move):
         self.board[move.end_row][move.end_col] = move.piece_moved
         self.board[move.start_row][move.start_col] = "--"
         self.move_log.append(move)
         self.white_to_move = not self.white_to_move
+        if move.is_enpassant_move:
+            self.board[move.start_row][move.end_col] = "--"
         if move.piece_moved == "w_king":
             self.white_king_location = (move.end_row, move.end_col)
         elif move.piece_moved == "b_king":
             self.black_king_location = (move.end_row, move.end_col)
         self.position_history.append(self.get_position_hash())
+        if "pawn" in move.piece_moved and abs(move.end_row - move.start_row) == 2:
+            self.enpassant_possible = ((move.start_row + move.end_row) // 2, move.start_col)
+        else:
+            self.enpassant_possible = ()
 
     def undo_move(self):
         if len(self.move_log) != 0:
             move = self.move_log.pop()
             self.board[move.start_row][move.start_col] = move.piece_moved
             self.board[move.end_row][move.end_col] = move.piece_captured
+            if move.is_enpassant_move:
+                self.board[move.end_row][move.end_col] = "--"
+                self.board[move.start_row][move.end_col] = move.piece_captured
+            self.enpassant_possible = move.enpassant_possible_log
             self.white_to_move = not self.white_to_move
             if move.piece_moved == "w_king":
                 self.white_king_location = (move.start_row, move.start_col)
@@ -152,6 +163,7 @@ class GameState:
 
     def get_valid_moves(self):
         moves = self.get_all_possible_moves()
+        enpassant_backup = self.enpassant_possible
         for i in range(len(moves) - 1, -1, -1):
             self.make_move(moves[i])
             self.white_to_move = not self.white_to_move
@@ -159,7 +171,7 @@ class GameState:
                 moves.remove(moves[i])
             self.white_to_move = not self.white_to_move
             self.undo_move()
-
+        self.enpassant_possible = enpassant_backup
         if len(moves) == 0:
             if self.in_check():
                 self.checkmate = True
@@ -181,27 +193,35 @@ class GameState:
     def get_pawn_moves(self, r, c, moves):
         if self.white_to_move:
             if self.board[r - 1][c] == "--":
-                moves.append(Move((r, c), (r - 1, c), self.board))
+                moves.append(Move((r, c), (r - 1, c), self.board, enpassant_possible=self.enpassant_possible))
                 if (r == 6) and (self.board[r - 1][c] == "--") and (self.board[r - 2][c] == "--"):
-                    moves.append(Move((r, c), (r - 2, c), self.board))
+                    moves.append(Move((r, c), (r - 2, c), self.board, enpassant_possible=self.enpassant_possible))
 
             if c - 1 >= 0:
                 if self.board[r - 1][c - 1][0] == "b":
-                    moves.append(Move((r, c), (r - 1, c - 1), self.board))
+                    moves.append(Move((r, c), (r - 1, c - 1), self.board, enpassant_possible=self.enpassant_possible))
+                elif (r - 1, c - 1) == self.enpassant_possible:
+                    moves.append(Move((r, c), (r - 1, c - 1), self.board, enpassant_possible=self.enpassant_possible))
             if c + 1 <= 7:
                 if self.board[r - 1][c + 1][0] == "b":
-                    moves.append(Move((r, c), (r - 1, c + 1), self.board))
+                    moves.append(Move((r, c), (r - 1, c + 1), self.board, enpassant_possible=self.enpassant_possible))
+                elif (r - 1, c + 1) == self.enpassant_possible:
+                    moves.append(Move((r, c), (r - 1, c + 1), self.board, enpassant_possible=self.enpassant_possible))
         else:
             if self.board[r + 1][c] == "--":
-                moves.append(Move((r, c), (r + 1, c), self.board))
+                moves.append(Move((r, c), (r + 1, c), self.board, enpassant_possible=self.enpassant_possible))
                 if (r == 1) and (self.board[r + 1][c] == "--") and (self.board[r + 2][c] == "--"):
-                    moves.append(Move((r, c), (r + 2, c), self.board))
+                    moves.append(Move((r, c), (r + 2, c), self.board, enpassant_possible=self.enpassant_possible))
             if c - 1 >= 0:
                 if self.board[r + 1][c - 1][0] == "w":
-                    moves.append(Move((r, c), (r + 1, c - 1), self.board))
+                    moves.append(Move((r, c), (r + 1, c - 1), self.board, enpassant_possible=self.enpassant_possible))
+                elif (r + 1, c - 1) == self.enpassant_possible:
+                    moves.append(Move((r, c), (r + 1, c - 1), self.board, enpassant_possible=self.enpassant_possible))
             if c + 1 <= 7:
                 if self.board[r + 1][c + 1][0] == "w":
-                    moves.append(Move((r, c), (r + 1, c + 1), self.board))
+                    moves.append(Move((r, c), (r + 1, c + 1), self.board, enpassant_possible=self.enpassant_possible))
+                elif (r + 1, c + 1) == self.enpassant_possible:
+                    moves.append(Move((r, c), (r + 1, c + 1), self.board, enpassant_possible=self.enpassant_possible))
 
     def get_rook_moves(self, r, c, moves):
         directions = ((-1, 0), (0, -1), (1, 0), (0, 1))
@@ -215,9 +235,9 @@ class GameState:
                 if 0 <= end_row < 8 and 0 <= end_col < 8:
                     end_piece = self.board[end_row][end_col]
                     if end_piece == "--":
-                        moves.append(Move((r, c), (end_row, end_col), self.board))
+                        moves.append(Move((r, c), (end_row, end_col), self.board, enpassant_possible=self.enpassant_possible))
                     elif end_piece[0] == enemy_color:
-                        moves.append(Move((r, c), (end_row, end_col), self.board))
+                        moves.append(Move((r, c), (end_row, end_col), self.board, enpassant_possible=self.enpassant_possible))
                         break
                     else:
                         break
@@ -235,7 +255,7 @@ class GameState:
             if 0 <= end_row < 8 and 0 <= end_col < 8:
                 end_piece = self.board[end_row][end_col]
                 if (end_piece == "--") or (end_piece[0] == enemy_color):
-                    moves.append(Move((r, c), (end_row, end_col), self.board))
+                    moves.append(Move((r, c), (end_row, end_col), self.board, enpassant_possible=self.enpassant_possible))
 
     def get_bishop_moves(self, r, c, moves):
         directions = ((-1, -1), (-1, 1), (1, -1), (1, 1))
@@ -249,9 +269,9 @@ class GameState:
                 if 0 <= end_row < 8 and 0 <= end_col < 8:
                     end_piece = self.board[end_row][end_col]
                     if end_piece == "--":
-                        moves.append(Move((r, c), (end_row, end_col), self.board))
+                        moves.append(Move((r, c), (end_row, end_col), self.board, enpassant_possible=self.enpassant_possible))
                     elif end_piece[0] == enemy_color:
-                        moves.append(Move((r, c), (end_row, end_col), self.board))
+                        moves.append(Move((r, c), (end_row, end_col), self.board, enpassant_possible=self.enpassant_possible))
                         break
                     else:
                         break
@@ -270,9 +290,9 @@ class GameState:
                 if 0 <= end_row < 8 and 0 <= end_col < 8:
                     end_piece = self.board[end_row][end_col]
                     if end_piece == "--":
-                        moves.append(Move((r, c), (end_row, end_col), self.board))
+                        moves.append(Move((r, c), (end_row, end_col), self.board, enpassant_possible=self.enpassant_possible))
                     elif end_piece[0] == enemy_color:
-                        moves.append(Move((r, c), (end_row, end_col), self.board))
+                        moves.append(Move((r, c), (end_row, end_col), self.board, enpassant_possible=self.enpassant_possible))
                         break
                     else:
                         break
@@ -289,16 +309,16 @@ class GameState:
             if 0 <= end_row < 8 and 0 <= end_col < 8:
                 end_piece = self.board[end_row][end_col]
                 if end_piece == "--":
-                    moves.append(Move((r, c), (end_row, end_col), self.board))
+                    moves.append(Move((r, c), (end_row, end_col), self.board, enpassant_possible=self.enpassant_possible))
                 elif end_piece[0] == enemy_color:
-                    moves.append(Move((r, c), (end_row, end_col), self.board))
+                    moves.append(Move((r, c), (end_row, end_col), self.board, enpassant_possible=self.enpassant_possible))
 
 class Move:
     ranks_to_rows = {"1" : 7, "2" : 6, "3" : 5, "4" : 4, "5" : 3, "6": 2, "7" : 1, "8" : 0}
     rows_to_ranks = {v: k for k, v in ranks_to_rows.items()}
     files_to_cols = {"a" : 0, "b" : 1, "c" : 2, "d" : 3, "e" : 4, "f" : 5, "g" : 6, "h" : 7}
     cols_to_files = {v : k for k, v in files_to_cols.items()}
-    def __init__(self, start_sq, end_sq, board):
+    def __init__(self, start_sq, end_sq, board, enpassant_possible = ()):
         self.start_row = start_sq[0]
         self.start_col = start_sq[1]
         self.end_row = end_sq[0]
@@ -306,6 +326,11 @@ class Move:
 
         self.piece_moved = board[self.start_row][self.start_col]
         self.piece_captured = board[self.end_row][self.end_col]
+
+        self.enpassant_possible_log = enpassant_possible
+        self.is_enpassant_move = ("pawn" in self.piece_moved and (self.end_row, self.end_col) == self.enpassant_possible_log and self.start_col != self.end_col)
+        if self.is_enpassant_move:
+            self.piece_captured = "w_pawn" if self.piece_moved == "b_pawn" else "b_pawn"
 
         self.move_id = self.start_row * 1000 + self.start_col * 100 + self.end_row * 10 + self.end_col
 

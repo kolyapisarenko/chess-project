@@ -45,7 +45,7 @@ def main():
                                 selected_square = ()
                                 player_clicks = []                            
                         if len(player_clicks) == 2:
-                            move = Move(player_clicks[0], player_clicks[1], gs.board)
+                            move = Move(player_clicks[0], player_clicks[1], gs.board, enpassant_possible=gs.enpassant_possible)
                             if move in valid_moves:
                                 gs.make_move(move)
                                 move_made = True
