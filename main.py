@@ -46,26 +46,56 @@ def main():
                                 player_clicks = []                            
                         if len(player_clicks) == 2:
                             move = Move(player_clicks[0], player_clicks[1], gs.board, enpassant_possible=gs.enpassant_possible)
-                            if move in valid_moves:
-                                gs.make_move(move)
+                            found_move = None
+                            for m in valid_moves:
+                                if move == m:
+                                    found_move = m
+                                    break
+
+                            if found_move:
+                                if found_move.is_pawn_promotion:
+                                    piece_rects = renderer.draw_promotion_menu(gs.white_to_move)
+                                    waiting_for_choice = True
+
+                                    while waiting_for_choice:
+                                        for e in pygame.event.get():
+                                            if e.type == pygame.QUIT:
+                                                pygame.quit()
+                                                exit()
+                                            if e.type == pygame.MOUSEBUTTONDOWN:
+                                                if e.button == 1:
+                                                    mouse_pos = pygame.mouse.get_pos()
+                                                    for rect, piece_name in piece_rects:
+                                                        if rect.collidepoint(mouse_pos):
+                                                            found_move.promotion_piece = piece_name
+                                                            waiting_for_choice = False
+                                                            break
+                                gs.make_move(found_move)
                                 move_made = True
-                                if move.piece_captured != "--":
+                                move_sound = None
+
+                                if found_move.is_pawn_promotion:
+                                    move_sound = pygame.mixer.Sound(config.SOUND_PATH + "promote.wav")
+                                elif found_move.is_castle_move:
+                                    move_sound = pygame.mixer.Sound(config.SOUND_PATH + "castle.wav")
+                                elif found_move.piece_captured != "--":
                                     move_sound = pygame.mixer.Sound(config.SOUND_PATH + "capture.wav")
                                 else:
                                     move_sound = pygame.mixer.Sound(config.SOUND_PATH + "move-self.wav")
-                                
-                                temp_valid_moves = gs.get_valid_moves()
 
-                                if gs.checkmate:
-                                    pygame.mixer.Sound(config.SOUND_PATH + "move-check.wav").play()
-                                    pygame.mixer.Sound(config.SOUND_PATH + "game-over.wav").play()
-                                elif gs.stealmate:
+                                if move_sound:
                                     move_sound.play()
-                                    pygame.mixer.Sound(config.SOUND_PATH + "game-over.wav").play()
-                                elif gs.in_check():
-                                    pygame.mixer.Sound(config.SOUND_PATH + "move-check.wav").play()
-                                else:
-                                    move_sound.play()
+                                    
+                                if gs.checkmate or gs.stealmate or gs.in_check():
+                                    pygame.time.wait(250) 
+                                    if gs.checkmate:
+                                        pygame.mixer.Sound(config.SOUND_PATH + "move-check.wav").play()
+                                        pygame.time.wait(300)
+                                        pygame.mixer.Sound(config.SOUND_PATH + "game-over.wav").play()
+                                    elif gs.stealmate:
+                                        pygame.mixer.Sound(config.SOUND_PATH + "game-over.wav").play()
+                                    elif gs.in_check():
+                                        pygame.mixer.Sound(config.SOUND_PATH + "move-check.wav").play()
 
                                 selected_square = ()
                                 player_clicks = []

@@ -66,6 +66,30 @@ class BoardRenderer:
             highlight.set_alpha(100)
             self.screen.blit(highlight, (x, y))
 
+    def draw_promotion_menu(self, is_white):
+        color = "w" if is_white else "b"
+        pieces = ["queen", "rook", "bishop", "knight"]
+
+        menu_width = config.CELL_SIZE * 4
+        menu_height = config.CELL_SIZE
+        start_x = (config.SCREEN_WIDTH - menu_width) // 2
+        start_y = (config.SCREEN_HEIGHT - menu_height) // 2
+
+        menu_rect = pygame.Rect(start_x, start_y, menu_width, menu_height)
+        pygame.draw.rect(self.screen, (50, 50, 50), menu_rect)
+        pygame.draw.rect(self.screen, (200, 200, 200), menu_rect, 3)
+
+        piece_rects = []
+        for i, piece_name in enumerate(pieces):
+            piece_img_rect = f"{color}_{piece_name}"
+            img = self.piece_images[piece_img_rect]
+            rect = pygame.Rect(start_x + i * config.CELL_SIZE, start_y, config.CELL_SIZE, config.CELL_SIZE)
+            img_rect = img.get_rect(center=rect.center)
+            self.screen.blit(img, img_rect)
+            piece_rects.append((rect, piece_name))
+        pygame.display.flip()
+        return piece_rects
+
     def render(self, game_state, selected_square):
         self.draw_board()
         self.draw_coordinates()
