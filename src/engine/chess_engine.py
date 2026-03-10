@@ -1,4 +1,5 @@
 from src import config
+from collections import Counter
 
 class CastleRights:
     def __init__(self, wks, bks, wqs, bqs):
@@ -29,6 +30,39 @@ class GameState:
         self.enpassant_possible = ()
         self.current_castle_rights = CastleRights(True, True, True, True)
         self.castle_rights_log = [CastleRights(True, True, True, True)]
+        self.white_time = 600000
+        self.black_time = 600000
+        self.on_time = False
+        self.piece_value = {"pawn" : 1, "knight" : 3, "bishop" : 3, "rook" : 5, "queen" : 9, "king" : 0}
+
+    def get_material_info(self):
+        white_pieces = []
+        black_pieces = []
+        balance = 0
+
+        for r in range(config.ROWS):
+            for c in range(config.COLS):
+                piece = self.board[r][c]
+                if piece != "--":
+                    piece_type = piece[2:]
+                    color = piece[0]
+                    value = self.piece_value[piece_type]
+
+                    if color == "w":
+                        balance += value
+                        white_pieces.append(piece_type)
+                    else:
+                        balance -= value
+                        black_pieces.append(piece_type)
+
+        w_count = Counter(white_pieces)
+        b_count = Counter(black_pieces)
+
+        white_advantage = list((w_count - b_count).elements())
+        black_advantage = list((b_count - w_count).elements())
+        white_advantage.sort(key=lambda x: self.piece_value[x])
+        black_advantage.sort(key=lambda x: self.piece_value[x])
+        return balance, white_advantage, black_advantage
 
     def make_move(self, move):
         self.board[move.end_row][move.end_col] = move.piece_moved
@@ -58,6 +92,8 @@ class GameState:
             self.enpassant_possible = ((move.start_row + move.end_row) // 2, move.start_col)
         else:
             self.enpassant_possible = ()
+        if self.in_check():
+            move.is_check = True
 
     def undo_move(self):
         if len(self.move_log) != 0:
@@ -426,9 +462,30 @@ class Move:
             self.piece_captured = "w_pawn" if self.piece_moved == "b_pawn" else "b_pawn"
         self.is_castle_move = is_castle_move or (self.piece_moved[2:] == "king" and abs(self.start_col - self.end_col) == 2)
         self.move_id = self.start_row * 1000 + self.start_col * 100 + self.end_row * 10 + self.end_col
+        self.is_check = False
+        self.is_mate = False
 
     def get_chess_notation(self):
-        return self.get_rank_file(self.start_row, self.start_col) + self.get_rank_file(self.end_row, self.end_col)
+        if hasattr(self, 'is_castle_move') and self.is_castle_move:
+            return "O-O" if self.end_col == 6 else "O-O-O"
+        else:    
+            names = {"pawn": "", "queen": "Q", "rook" : "R", "bishop": "B", "knight" : "N", "king" : "K"}
+            piece = self.piece_moved[2:]
+            prefix = names.get(piece, "")
+
+            if piece == "pawn" and self.piece_captured != "--":
+                prefix = self.cols_to_files[self.start_col] + "x"
+            elif self.piece_captured != "--":
+                prefix += "x"
+
+            notation = prefix + self.get_rank_file(self.end_row, self.end_col)
+
+        if self.is_mate:
+            notation += "#"
+        elif self.is_check:
+            notation += "+"
+
+        return notation
     
     def get_rank_file(self, r, c):
         return self.cols_to_files[c] + self.rows_to_ranks[r]
