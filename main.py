@@ -118,7 +118,6 @@ def main():
                                         
                                         gs.make_move(found_move)
                                         move_made = True
-                                        
                                         play_move_sound(found_move, gs)
 
                                         selected_square = ()
@@ -155,7 +154,6 @@ def main():
                     arrow_start = None
 
         screen.fill(config.BG_COLOR)
-        
         buttons = renderer.render(gs, selected_square, valid_moves, highlighting_set, arrows)
         
         if game_over and not game_over_sound_played:
