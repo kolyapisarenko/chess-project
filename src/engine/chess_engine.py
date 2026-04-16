@@ -92,8 +92,6 @@ class GameState:
             self.enpassant_possible = ((move.start_row + move.end_row) // 2, move.start_col)
         else:
             self.enpassant_possible = ()
-        if self.in_check():
-            move.is_check = True
 
     def undo_move(self):
         if len(self.move_log) != 0:
@@ -285,15 +283,16 @@ class GameState:
         if len(moves) == 0:
             if self.in_check():
                 self.checkmate = True
+                if len(self.move_log) > 0:
+                    self.move_log[-1].is_mate = True
             else:
                 self.stealmate = True
         else:
-            if self.check_insufficient_material():
-                self.stealmate = True
-            current_position = self.get_position_hash()
-            if self.position_history.count(current_position) >= 3:
-                self.stealmate = True
             self.checkmate = False
+            if self.check_insufficient_material() or self.position_history.count(self.get_position_hash()) >= 3:
+                self.stealmate = True
+        if not self.checkmate and self.in_check() and len(self.move_log) > 0:
+            self.move_log[-1].is_check = True
         return moves
 
     def get_position_hash(self):

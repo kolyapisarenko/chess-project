@@ -68,7 +68,14 @@ class BoardRenderer:
                 pygame.draw.circle(arrows_surface, color, (pivot_x, pivot_y), line_width // 2)
                 pygame.draw.line(arrows_surface, color, (pivot_x, pivot_y), (line_end_x, line_end_y), line_width)
             else:
-                pygame.draw.line(arrows_surface, color, (x1, y1), (line_end_x, line_end_y), line_width)
+                perl_angle = angle + math.pi / 2
+                dx = (line_width / 2) * math.cos(perl_angle)
+                dy = (line_width / 2) * math.sin(perl_angle)
+                p1 = (x1 + dx, y1 + dy)
+                p2 = (x1 - dx, y1 - dy)
+                p3 = (line_end_x - dx, line_end_y - dy)
+                p4 = (line_end_x + dx, line_end_y + dy)
+                pygame.draw.polygon(arrows_surface, color, [p1, p2, p3, p4])
 
             point = (x2, y2)
             left = (x2 - head_len * math.cos(angle - 0.6), y2 - head_len * math.sin(angle - 0.6))
