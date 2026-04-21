@@ -197,6 +197,55 @@ class BoardRenderer:
         pygame.display.flip()
         return piece_rects
 
+    def draw_color_selection(self):
+        overlay = pygame.Surface((config.SCREEN_WIDTH, config.SCREEN_HEIGHT))
+        overlay.set_alpha(220)
+        overlay.fill((10, 10, 10))
+        self.screen.blit(overlay, (0, 0))
+
+        selection_width = config.CELL_SIZE * 3
+        selection_height = config.CELL_SIZE
+        start_x = (config.SCREEN_WIDTH - selection_width) // 2
+        start_y = (config.SCREEN_HEIGHT - selection_height) // 2
+        
+        title_font = pygame.font.SysFont("Arial", 32, bold=True)
+        title_surf = title_font.render("CHOOSE YOUR SIDE", True, (212, 175, 55))
+        title_rect = title_surf.get_rect(center=(config.SCREEN_WIDTH // 2, start_y - 40))
+        self.screen.blit(title_surf, title_rect)
+
+        selection_rect = pygame.Rect(start_x, start_y, selection_width, selection_height)
+        pygame.draw.rect(self.screen, (40, 40, 40), selection_rect)
+        pygame.draw.rect(self.screen, (212, 175, 55), selection_rect, 2)
+        
+        big_font = pygame.font.SysFont("Arial", 70, bold=True)
+        
+        buttons_config = [
+            (0, "w", self.piece_images["w_king"]),
+            (1, "r", "?"),
+            (2, "b", self.piece_images["b_king"])
+        ]
+        
+        click_rects = []
+        mouse_pos = pygame.mouse.get_pos()
+        
+        for i, key, content in buttons_config:
+            rect = pygame.Rect(start_x + i * config.CELL_SIZE, start_y, config.CELL_SIZE, config.CELL_SIZE)
+            click_rects.append((rect, key))
+            
+            if rect.collidepoint(mouse_pos):
+                pygame.draw.rect(self.screen, (60, 60, 60), rect)
+                pygame.draw.rect(self.screen, (255, 215, 0), rect, 2)
+
+            if isinstance(content, pygame.Surface):
+                content_rect = content.get_rect(center=(rect.centerx, rect.centery - 5))
+                self.screen.blit(content, content_rect)
+            else:
+                surf = big_font.render(content, True, (255, 215, 0))
+                self.screen.blit(surf, surf.get_rect(center=(rect.centerx, rect.centery - 5)))
+                
+
+        return click_rects
+
     def draw_timers(self, game_state):
         def format_time(ms):
             seconds = ms // 1000
@@ -376,11 +425,11 @@ class BoardRenderer:
         start_text = btn_font.render("START GAME", True, (255, 255, 255))
         self.screen.blit(start_text, start_text.get_rect(center=start_btn_rect.center))
 
-        pygame.draw.rect(self.screen, (40, 40, 40), ai_btn_rect)
-        pygame.draw.rect(self.screen, (80, 80, 80), ai_btn_rect, 2)
-        ai_text = btn_font.render("PLAY WITH AI (SOON)", True, (120, 120, 120))
+        pygame.draw.rect(self.screen, (35, 30, 20), ai_btn_rect)
+        pygame.draw.rect(self.screen, (212, 175, 55), ai_btn_rect, 2)
+        ai_text = btn_font.render("PLAY WITH AI", True, (235, 230, 200))
         self.screen.blit(ai_text, ai_text.get_rect(center=ai_btn_rect.center))
-        return start_btn_rect
+        return start_btn_rect, ai_btn_rect
 
     def render(self, game_state, selected_square, valid_moves, highlighting_set, arrows):
         self.draw_board()
