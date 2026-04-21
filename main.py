@@ -184,7 +184,7 @@ def main():
 
         if not game_over and not human_turn and game_started:
             start_thinking = pygame.time.get_ticks()
-            ai_move = find_best_move(gs, depth=3)
+            ai_move = find_best_move(gs, depth=4)
             end_thinking = pygame.time.get_ticks()
             duration = end_thinking - start_thinking
             if ai_move:
