@@ -1,8 +1,10 @@
 import pygame
 import sys
+import random
 from src import config
 from src.ui.renderer import BoardRenderer
 from src.engine.chess_engine import GameState, Move
+from src.engine.ai_engine import find_best_move
 
 def main():
     pygame.init()
@@ -28,6 +30,8 @@ def main():
     
     game_started = False 
     game_over_sound_played = False
+    game_mode = "PvP"
+    player_color = "w"
 
     running = True
     while running:
@@ -37,16 +41,37 @@ def main():
 
         if not game_started:
             screen.fill(config.BG_COLOR)
-            start_btn_rect = renderer.draw_main_menu() 
+            start_btn_rect, ai_btn_rect = renderer.draw_main_menu() 
             
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     running = False
-                if event.type == pygame.MOUSEBUTTONDOWN:
-                    if event.button == 1:
-                        if start_btn_rect.collidepoint(event.pos):
-                            game_started = True
-                            last_time = pygame.time.get_ticks()
+                if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                    if start_btn_rect.collidepoint(event.pos):
+                        game_mode = "PvP"
+                        game_started = True
+                        last_time = pygame.time.get_ticks()
+                    elif ai_btn_rect.collidepoint(event.pos):
+                        color_rects = renderer.draw_color_selection()
+                        pygame.display.flip()
+                        waiting = True
+                        while waiting:
+                            for e in pygame.event.get():
+                                if e.type == pygame.QUIT:
+                                    pygame.quit()
+                                    sys.exit()
+                                if e.type == pygame.MOUSEBUTTONDOWN and e.button == 1:
+                                    m_pos = pygame.mouse.get_pos()
+                                    for r, c_code in color_rects:
+                                        if r.collidepoint(m_pos):
+                                            if c_code == "r":
+                                                player_color = random.choice(["w", "b"])
+                                            else:
+                                                player_color = c_code
+                                            game_mode = "PvE"
+                                            game_started = True
+                                            waiting = False
+                                            last_time = pygame.time.get_ticks()
             
             pygame.display.flip()
             clock.tick(config.FPS)
@@ -67,19 +92,22 @@ def main():
                 gs.black_time = 0
                 gs.on_time = True
 
+        human_turn = (gs.white_to_move and player_color == "w") or \
+                     (not gs.white_to_move and player_color == "b") or \
+                     game_mode == "PvP"
+
         events = pygame.event.get()
         for event in events:
             if event.type == pygame.QUIT:
                 running = False
             
             elif event.type == pygame.MOUSEBUTTONDOWN:
-                location = event.pos
-                
-                if event.button == 1:
-                    highlighting_set.clear()
-                    arrows.clear()
-                    
-                    if not game_over:
+                if not game_over and human_turn:
+                    location = event.pos
+                    if event.button == 1:
+                        highlighting_set.clear()
+                        arrows.clear()
+                        
                         col = (location[0] - config.ORIGIN_X) // config.CELL_SIZE
                         row = (location[1] - config.ORIGIN_Y) // config.CELL_SIZE
                         
@@ -89,12 +117,12 @@ def main():
                                 player_clicks = []
                             else:        
                                 piece = gs.board[row][col]
-                                color = True if piece[0] == "w" else False
+                                piece_color = True if piece[0] == "w" else False
                                 selected_square = (row, col)
                                 player_clicks.append(selected_square)
                                 
                                 if len(player_clicks) == 1:
-                                    if (color != gs.white_to_move) or (piece == "--"):
+                                    if (piece_color != gs.white_to_move) or (piece == "--"):
                                         selected_square = ()
                                         player_clicks = []
                                 
@@ -105,6 +133,7 @@ def main():
                                     if found_move:
                                         if found_move.is_pawn_promotion:
                                             piece_rects = renderer.draw_promotion_menu(gs.white_to_move)
+                                            pygame.display.flip()
                                             waiting = True
                                             while waiting:
                                                 for e in pygame.event.get():
@@ -119,19 +148,19 @@ def main():
                                         gs.make_move(found_move)
                                         move_made = True
                                         play_move_sound(found_move, gs)
-
                                         selected_square = ()
                                         player_clicks = []
                                         valid_moves = gs.get_valid_moves()
                                     else:
-                                        if color == gs.white_to_move:
+                                        if piece_color == gs.white_to_move:
                                             selected_square = (row, col)
                                             player_clicks = [selected_square]
                                         else:
                                             selected_square = ()
                                             player_clicks = []
 
-                elif event.button == 3:
+                if event.button == 3:
+                    location = event.pos
                     col = (location[0] - config.ORIGIN_X) // config.CELL_SIZE
                     row = (location[1] - config.ORIGIN_Y) // config.CELL_SIZE
                     if 0 <= row < 8 and 0 <= col < 8:
@@ -153,6 +182,22 @@ def main():
                             else: arrows.append(new_arrow)
                     arrow_start = None
 
+        if not game_over and not human_turn and game_started:
+            start_thinking = pygame.time.get_ticks()
+            ai_move = find_best_move(gs, depth=3)
+            end_thinking = pygame.time.get_ticks()
+            duration = end_thinking - start_thinking
+            if ai_move:
+                if gs.white_to_move:
+                    gs.white_time -= duration
+                else:
+                    gs.black_time -= duration
+                gs.make_move(ai_move)
+                move_made = True
+                play_move_sound(ai_move, gs)
+                valid_moves = gs.get_valid_moves()
+                last_time = pygame.time.get_ticks()
+
         screen.fill(config.BG_COLOR)
         buttons = renderer.render(gs, selected_square, valid_moves, highlighting_set, arrows)
         
@@ -163,7 +208,6 @@ def main():
                 pygame.mixer.Sound(config.SOUND_PATH + "game-over.wav").play()
             else:
                 pygame.mixer.Sound(config.SOUND_PATH + "game-over.wav").play()
-            
             game_over_sound_played = True
 
         if game_over and buttons:
@@ -178,6 +222,7 @@ def main():
                         arrows.clear()
                         move_made = False
                         game_over_sound_played = False
+                        game_started = False
                     
                     elif quit_btn_rect.collidepoint(event.pos):
                         running = False

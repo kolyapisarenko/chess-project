@@ -91,4 +91,4 @@ def evaluate(gs):
                 else:
                     black_position += PIECE_SQUARE_TABLE[piece_type][7 - r][c] + PIECE_VALUES[piece_type]
 
-    return white_position, black_position, white_position - black_position
+    return white_position - black_position
