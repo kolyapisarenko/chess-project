@@ -1,5 +1,18 @@
 class BitboardConstants:
     SQUARES = [1 << i for i in range(64)]
+    FILE_A = 0x0101010101010101
+    FILE_B = FILE_A << 1
+    FILE_C = FILE_B << 1
+    FILE_D = FILE_C << 1
+    FILE_E = FILE_D << 1
+    FILE_F = FILE_E << 1
+    FILE_G = FILE_F << 1
+    FILE_H = FILE_G << 1
+
+    NOT_A_FILE = ~(FILE_A) & 0xFFFFFFFFFFFFFFFF
+    NOT_AB_FILE = ~(FILE_A | FILE_B) & 0xFFFFFFFFFFFFFFFF
+    NOT_H_FILE = ~(FILE_H) & 0xFFFFFFFFFFFFFFFF
+    NOT_GH_FILE = ~(FILE_G | FILE_H) & 0xFFFFFFFFFFFFFFFF
 
     @staticmethod
     def set_bit(bitboard, square_index):
