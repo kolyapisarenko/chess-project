@@ -14,7 +14,9 @@ class Board:
         self.black_bishops = 0
         self.black_queen = 0
         self.black_king = 0
+        self.piece_map = {"P":"white_pawns", "R":"white_rooks", "N":"white_knights", "B":"white_bishops", "Q":"white_queen", "K":"white_king", "p":"black_pawns", "r":"black_rooks", "n":"black_knights", "b":"black_bishops", "q":"black_queen", "k":"black_king"}
         self._setup_initial_position()
+        self._update_occupancy()
 
     def _setup_initial_position(self):
         self.white_king = BitboardConstants.set_bit(self.white_king, 4)
@@ -39,12 +41,13 @@ class Board:
         for i in range(48, 56):
             self.black_pawns = BitboardConstants.set_bit(self.black_pawns, i)
 
+    def _update_occupancy(self):
         self.white_pieces = (self.white_pawns | self.white_rooks | self.white_knights | self.white_bishops | self.white_queen | self.white_king) & 0xFFFFFFFFFFFFFFFF
         self.black_pieces = (self.black_pawns | self.black_rooks | self.black_knights | self.black_bishops | self.black_queen | self.black_king) & 0xFFFFFFFFFFFFFFFF
         self.all_pieces = (self.white_pieces | self.black_pieces) & 0xFFFFFFFFFFFFFFFF
 
     def display_board(self):
-        piece_map = {"P" : self.white_pawns, "R" : self.white_rooks, "B" : self.white_bishops, "N" : self.white_knights, "Q" : self.white_queen, "K" : self.white_king, "p" : self.black_pawns, "r" : self.black_rooks, "b" : self.black_bishops, "n" : self.black_knights, "q" : self.black_queen, "k" : self.black_king}
+        piece_map = {char: getattr(self, attr) for char, attr in self.piece_map.items()}
 
         for rank in range(7, -1, -1):
             row = f"{rank + 1} "
