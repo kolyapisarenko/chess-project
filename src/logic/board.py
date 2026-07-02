@@ -41,6 +41,21 @@ class Board:
         for i in range(48, 56):
             self.black_pawns = BitboardConstants.set_bit(self.black_pawns, i)
 
+    def clear_board(self):
+        self.white_pawns = 0
+        self.white_rooks = 0
+        self.white_knights = 0
+        self.white_bishops = 0
+        self.white_queen = 0
+        self.white_king = 0
+        self.black_pawns = 0
+        self.black_rooks = 0
+        self.black_knights = 0
+        self.black_bishops = 0
+        self.black_queen = 0
+        self.black_king = 0
+        self._update_occupancy()
+
     def _update_occupancy(self):
         self.white_pieces = (self.white_pawns | self.white_rooks | self.white_knights | self.white_bishops | self.white_queen | self.white_king) & 0xFFFFFFFFFFFFFFFF
         self.black_pieces = (self.black_pawns | self.black_rooks | self.black_knights | self.black_bishops | self.black_queen | self.black_king) & 0xFFFFFFFFFFFFFFFF
