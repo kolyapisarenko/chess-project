@@ -3,6 +3,8 @@ from src.logic.magic_number import get_magic_candidate
 from src.logic import magics
 
 class AttackTables:
+    mask = 0xFFFFFFFFFFFFFFFF
+
     def __init__(self):
         self.mask = 0xFFFFFFFFFFFFFFFF
         self.KNIGHT_ATTACKS = [0] * 64
