@@ -1,4 +1,6 @@
 from src.logic import board, bitboard_utils, move_gen
+from src.logic.adapter import to_matrix
+from collections import Counter
 
 class BitboardEngine:
     def __init__(self):
@@ -21,7 +23,88 @@ class BitboardEngine:
         self.en_passant_sq = -1
         self.prev_en_passant_sq = -1
         self.move_log = []
-        self.in_check = False
+        self.in_check_flag = False
+
+        #Game state
+        self.board = to_matrix(self.new_board)
+        self.white_time = 600000
+        self.black_time = 600000
+        self.on_time = False
+        self.stealmate = False
+        self.checkmate = False
+
+    #Function to get the material info of the current board state
+    def get_material_info(self):
+        self.piece_value = {"pawn": 1, "knight": 3, "bishop": 3, "rook": 5, "queen": 9, "king": 0}
+        white_pieces = []
+        black_pieces = []
+        balance = 0
+
+        for r in range(8):
+            for c in range(8):
+                piece = self.board[r][c]
+                if piece != "--" and piece != "":
+                    color = piece[0]
+                    piece_type = piece[2:]
+                    if piece_type not in self.piece_value:
+                        continue
+                    value = self.piece_value[piece_type]
+                    if color == "w":
+                        if piece_type != "king":
+                            white_pieces.append(piece_type)
+                            balance += value
+                    elif color == "b":
+                        if piece_type != "king":
+                            black_pieces.append(piece_type)
+                            balance -= value
+
+        w_counter = Counter(white_pieces)
+        b_counter = Counter(black_pieces)
+        white_advantage = list((w_counter - b_counter).elements())
+        black_advantage = list((b_counter - w_counter).elements())
+
+        white_advantage.sort(key=lambda x: self.piece_value[x])
+        black_advantage.sort(key=lambda x: self.piece_value[x])
+
+        return balance, white_advantage, black_advantage
+
+    #Function that fits old name in main.py to new function name
+    def get_valid_moves(self):
+        return self.generate_legal_moves()
+
+    #Function to check if the current player is in check
+    def in_check(self):
+        self.generate_pin_and_check_mask()
+        return self.in_check_flag
+
+    #Function to check if the game could be drawn due to insufficient material
+    def check_insufficient_material(self):
+        b = self.new_board
+
+        if b.white_pawns or b.black_pawns or b.white_rooks or b.black_rooks or b.white_queen or b.black_queen:
+            return False
+        w_knight_count = bin(b.white_knights).count("1")
+        b_knight_count = bin(b.black_knights).count("1")
+        w_bishop_count = bin(b.white_bishops).count("1")
+        b_bishop_count = bin(b.black_bishops).count("1")
+        total_minor_pieces = w_knight_count + b_knight_count + w_bishop_count + b_bishop_count
+        if total_minor_pieces == 0:
+            return True
+        if total_minor_pieces == 1:
+            return True
+        return False
+
+    #Function to update the game status based on the current board state
+    def _update_game_status(self):
+        moves = self.generate_legal_moves()
+        if len(moves) == 0:
+            if self.in_check_flag:
+                self.checkmate = True
+            else:
+                self.stealmate = True
+        else:
+            self.checkmate = False
+            self.stealmate = False
 
     #Vizualize board method
     def draw_board(self):
@@ -99,6 +182,9 @@ class BitboardEngine:
         self.white_to_move = not self.white_to_move
         self.new_board._update_occupancy()
 
+        self.board = to_matrix(self.new_board)
+        self._update_game_status()
+
     def undo_move(self):
         if self.move_log:
             #Getting last move
@@ -150,6 +236,8 @@ class BitboardEngine:
                 setattr(self.new_board, capture_attr, getattr(self.new_board, capture_attr) ^ capture_mask)
             
             self.new_board._update_occupancy()
+            self.board = to_matrix(self.new_board)
+            self._update_game_status()
 
     #Function to get the square of the king for the current player
     def get_king_square(self, white_to_move):
@@ -196,30 +284,30 @@ class BitboardEngine:
         pawn_attacks = 0
         king_bit = 1 << king_square
         if self.white_to_move:
-            if king_bit & bitboard_utils.BitboardsConstants.NOT_H_FILE:
-                pawn_attacks |= 1 << (king_square + 9) & move_gen.mask
-            if king_bit & bitboard_utils.BitboardsConstants.NOT_A_FILE:
-                pawn_attacks |= 1 << (king_square + 7) & move_gen.mask
+            if king_bit & bitboard_utils.BitboardConstants.NOT_H_FILE:
+                pawn_attacks |= 1 << (king_square + 9) & move_gen.AttackTables.mask
+            if king_bit & bitboard_utils.BitboardConstants.NOT_A_FILE:
+                pawn_attacks |= 1 << (king_square + 7) & move_gen.AttackTables.mask
         else:
-            if king_bit & bitboard_utils.BitboardsConstants.NOT_A_FILE:
-                pawn_attacks |= 1 << (king_square - 9) & move_gen.mask
-            if king_bit & bitboard_utils.BitboardsConstants.NOT_H_FILE:
-                pawn_attacks |= 1 << (king_square - 7) & move_gen.mask
+            if king_bit & bitboard_utils.BitboardConstants.NOT_A_FILE:
+                pawn_attacks |= 1 << (king_square - 9) & move_gen.AttackTables.mask
+            if king_bit & bitboard_utils.BitboardConstants.NOT_H_FILE:
+                pawn_attacks |= 1 << (king_square - 7) & move_gen.AttackTables.mask
         check_ers |= pawn_attacks & enemy_pawns
 
         #Counting the number of checkers and updating the in_check status and check_mask accordingly
         count = bin(check_ers).count("1")
         if count == 0:
-            self.in_check = False
+            self.in_check_flag = False
         elif count == 1:
-            self.in_check = True
+            self.in_check_flag = True
             checker_square = check_ers.bit_length() - 1
             checker_bit = 1 << checker_square
             ray_from_king = self.attack_tables.get_queen_attacks(king_square, all_occ)
             ray_from_checker = self.attack_tables.get_queen_attacks(checker_square, all_occ)
             check_mask = ray_from_king & ray_from_checker | checker_bit
         else:
-            self.in_check = True
+            self.in_check_flag = True
             check_mask = 0
         
         #Getting our pieces based on the current player
@@ -233,7 +321,7 @@ class BitboardEngine:
         rook_xray = self.attack_tables.get_rook_attacks(king_square, enemy_pieces)
         pinners_flat = rook_xray & (enemy_rooks | enemy_queen)
         while pinners_flat:
-            pinner_sq = (pinner_flat & -pinner_flat).bit_length() - 1
+            pinner_sq = (pinners_flat & -pinners_flat).bit_length() - 1
             line = (self.attack_tables.get_rook_attacks(king_square, all_occ) & self.attack_tables.get_rook_attacks(pinner_sq, all_occ)) | (1 << pinner_sq)
             our_pieces_on_line = line & our_pieces
             if bin(our_pieces_on_line).count("1") == 1:
@@ -257,8 +345,8 @@ class BitboardEngine:
 
     #Function to get the captured piece based on the target square and the current player
     def get_captured_piece(self, target_bit):
+        b = self.new_board
         if self.white_to_move:
-            b = self.new_board
             if target_bit & b.black_pawns:
                 return "p"
             elif target_bit & b.black_rooks:
@@ -300,6 +388,7 @@ class BitboardEngine:
             enemy_bishops = self.new_board.black_bishops
             enemy_queen = self.new_board.black_queen
             enemy_pawns = self.new_board.black_pawns
+            enemy_pieces = self.new_board.black_pieces
         else:
             our_pieces = self.new_board.black_pieces
             our_knights = self.new_board.black_knights
@@ -312,6 +401,7 @@ class BitboardEngine:
             enemy_bishops = self.new_board.white_bishops
             enemy_queen = self.new_board.white_queen
             enemy_pawns = self.new_board.white_pawns
+            enemy_pieces = self.new_board.white_pieces
 
         all_occ = self.new_board.all_pieces
         enemy_attacks = 0
@@ -342,11 +432,11 @@ class BitboardEngine:
 
         #Calculating enemy pawn attacks based on the current player's turn
         if self.white_to_move:
-            enemy_attacks |= (enemy_pawns & bitboard_utils.BitboardsConstants.NOT_A_FILE) >> 9
-            enemy_attacks |= (enemy_pawns & bitboard_utils.BitboardsConstants.NOT_H_FILE) >> 7
+            enemy_attacks |= (enemy_pawns & bitboard_utils.BitboardConstants.NOT_A_FILE) >> 9
+            enemy_attacks |= (enemy_pawns & bitboard_utils.BitboardConstants.NOT_H_FILE) >> 7
         else:
-            enemy_attacks |= (enemy_pawns & bitboard_utils.BitboardsConstants.NOT_H_FILE) << 9
-            enemy_attacks |= (enemy_pawns & bitboard_utils.BitboardsConstants.NOT_A_FILE) << 7
+            enemy_attacks |= (enemy_pawns & bitboard_utils.BitboardConstants.NOT_H_FILE) << 9
+            enemy_attacks |= (enemy_pawns & bitboard_utils.BitboardConstants.NOT_A_FILE) << 7
 
         #Setting piece characters based on the current player's turn
         p_char = "P" if self.white_to_move else "p"
@@ -367,7 +457,7 @@ class BitboardEngine:
                     target_sq = (legal_attacks & -legal_attacks).bit_length() - 1
                     target_bit = 1 << target_sq
                     capture = self.get_captured_piece(target_bit)
-                    moves.append(move.Move(sq, target_sq, piece_moved=n_char, piece_captured=capture))
+                    moves.append(Move(sq, target_sq, piece_moved=n_char, piece_captured=capture))
                     legal_attacks &= legal_attacks - 1
                 temp_our_knights &= temp_our_knights - 1
 
@@ -380,7 +470,7 @@ class BitboardEngine:
                     target_sq = (legal_attacks & -legal_attacks).bit_length() - 1
                     target_bit = 1 << target_sq
                     capture = self.get_captured_piece(target_bit)
-                    moves.append(move.Move(sq, target_sq, piece_moved=r_char, piece_captured=capture))
+                    moves.append(Move(sq, target_sq, piece_moved=r_char, piece_captured=capture))
                     legal_attacks &= legal_attacks - 1
                 temp_our_rooks &= temp_our_rooks - 1
 
@@ -393,7 +483,7 @@ class BitboardEngine:
                     target_sq = (legal_attacks & -legal_attacks).bit_length() - 1
                     target_bit = 1 << target_sq
                     capture = self.get_captured_piece(target_bit)
-                    moves.append(move.Move(sq, target_sq, piece_moved=b_char, piece_captured=capture))
+                    moves.append(Move(sq, target_sq, piece_moved=b_char, piece_captured=capture))
                     legal_attacks &= legal_attacks - 1
                 temp_our_bishops &= temp_our_bishops - 1
 
@@ -406,7 +496,7 @@ class BitboardEngine:
                     target_sq = (legal_attacks & -legal_attacks).bit_length() - 1
                     target_bit = 1 << target_sq
                     capture = self.get_captured_piece(target_bit)
-                    moves.append(move.Move(sq, target_sq, piece_moved=q_char, piece_captured=capture))
+                    moves.append(Move(sq, target_sq, piece_moved=q_char, piece_captured=capture))
                     legal_attacks &= legal_attacks - 1
                 temp_our_queen &= temp_our_queen - 1
 
@@ -421,26 +511,26 @@ class BitboardEngine:
                     forward_two = sq + 16
                     start_rank_mask = 0x000000000000FF00
                     promotion_rank_mask = 0xFF00000000000000
-                    cap_left_sq = sq + 7 if (pawn_bit & bitboard_utils.BitboardsConstants.NOT_A_FILE) else -1
-                    cap_right_sq = sq + 9 if (pawn_bit & bitboard_utils.BitboardsConstants.NOT_H_FILE) else -1
+                    cap_left_sq = sq + 7 if (pawn_bit & bitboard_utils.BitboardConstants.NOT_A_FILE) else -1
+                    cap_right_sq = sq + 9 if (pawn_bit & bitboard_utils.BitboardConstants.NOT_H_FILE) else -1
                 else:
                     forward_one = sq - 8
                     forward_two = sq - 16
                     start_rank_mask = 0x00FF000000000000
                     promotion_rank_mask = 0x00000000000000FF
-                    cap_left_sq = sq - 9 if (pawn_bit & bitboard_utils.BitboardsConstants.NOT_A_FILE) else -1
-                    cap_right_sq = sq - 7 if (pawn_bit & bitboard_utils.BitboardsConstants.NOT_H_FILE) else -1
+                    cap_left_sq = sq - 9 if (pawn_bit & bitboard_utils.BitboardConstants.NOT_A_FILE) else -1
+                    cap_right_sq = sq - 7 if (pawn_bit & bitboard_utils.BitboardConstants.NOT_H_FILE) else -1
 
                 if not (all_occ & (1 << forward_one)):
                     if (1 << forward_one) & check_mask & pin_mask[sq]:
                         if (1 << forward_one) & promotion_rank_mask:
                             for piece in ["Q", "R", "B", "N"]:
-                                moves.append(move.Move(sq, forward_one, piece_moved=p_char, piece_captured=None, is_promotion=True, promotion_piece=piece))
+                                moves.append(Move(sq, forward_one, piece_moved=p_char, piece_captured=None, is_promotion=True, promotion_piece=piece))
                         else:
-                            moves.append(move.Move(sq, forward_one, piece_moved=p_char, piece_captured=None))
+                            moves.append(Move(sq, forward_one, piece_moved=p_char, piece_captured=None))
                     if (pawn_bit & start_rank_mask) and not (all_occ & (1 << forward_two)):
                         if (1 << forward_two) & check_mask & pin_mask[sq]:
-                            moves.append(move.Move(sq, forward_two, piece_moved=p_char, piece_captured=None))
+                            moves.append(Move(sq, forward_two, piece_moved=p_char, piece_captured=None))
                 for target_sq in [cap_left_sq, cap_right_sq]:
                     if target_sq != -1:
                         target_bit = 1 << target_sq
@@ -448,11 +538,11 @@ class BitboardEngine:
                             capture = self.get_captured_piece(target_bit)
                             if target_bit & promotion_rank_mask:
                                 for piece in ["Q", "R", "B", "N"]:
-                                    moves.append(move.Move(sq, target_sq, piece_moved=p_char, piece_captured=capture, is_promotion=True, promotion_piece=piece))
+                                    moves.append(Move(sq, target_sq, piece_moved=p_char, piece_captured=capture, is_promotion=True, promotion_piece=piece))
                             else:
-                                moves.append(move.Move(sq, target_sq, piece_moved=p_char, piece_captured=capture))
+                                moves.append(Move(sq, target_sq, piece_moved=p_char, piece_captured=capture))
                         elif target_sq == self.en_passant_sq:
-                            moves.append(move.Move(sq, target_sq, piece_moved=p_char, piece_captured="p" if self.white_to_move else "P", is_enpasant=True))
+                            moves.append(Move(sq, target_sq, piece_moved=p_char, piece_captured="p" if self.white_to_move else "P", is_enpassant=True))
 
                 temp_our_pawns &= temp_our_pawns - 1
 
@@ -464,23 +554,25 @@ class BitboardEngine:
                 target_sq = (king_legal_attacks & -king_legal_attacks).bit_length() - 1
                 target_bit = 1 << target_sq
                 capture = self.get_captured_piece(target_bit)
-                moves.append(move.Move(king_square, target_sq, piece_moved=k_char, piece_captured=capture))
+                moves.append(Move(king_square, target_sq, piece_moved=k_char, piece_captured=capture))
                 king_legal_attacks &= king_legal_attacks - 1
-            if not self.in_check:
+            if not self.in_check_flag:
                 if self.white_to_move:
                     if (self.castling_rights & self.WK) and not (all_occ & ((1 << 5) | (1 << 6))):
                         if not (enemy_attacks & ((1 << 5) | (1 << 6))):
-                            moves.append(move.Move(4, 6, piece_moved=k_char, is_castling=True))
+                            moves.append(Move(4, 6, piece_moved=k_char, is_castling=True))
                     if (self.castling_rights & self.WQ) and not (all_occ & ((1 << 1) | (1 << 2) | (1 << 3))):
                         if not (enemy_attacks & ((1 << 2) | (1 << 3))):
-                            moves.append(move.Move(4, 2, piece_moved=k_char, is_castling=True))
+                            moves.append(Move(4, 2, piece_moved=k_char, is_castling=True))
                 else:
                     if (self.castling_rights & self.BK) and not (all_occ & ((1 << 61) | (1 << 62))):
                         if not (enemy_attacks & ((1 << 61) | (1 << 62))):
-                            moves.append(move.Move(60, 62, piece_moved=k_char, is_castling=True))
+                            moves.append(Move(60, 62, piece_moved=k_char, is_castling=True))
                     if (self.castling_rights & self.BQ) and not (all_occ & ((1 << 57) | (1 << 58) | (1 << 59))):
                         if not (enemy_attacks & ((1 << 58) | (1 << 59))):
-                            moves.append(move.Move(60, 58, piece_moved=k_char, is_castling=True))
+                            moves.append(Move(60, 58, piece_moved=k_char, is_castling=True))
+
+        return moves
                 
 
 class Move:
@@ -490,13 +582,13 @@ class Move:
     files_to_cols = {"a" : 0, "b" : 1, "c" : 2, "d" : 3, "e" : 4, "f" : 5, "g" : 6, "h" : 7}
     cols_to_files = {v : k for k, v in files_to_cols.items()}
     
-    def __init__(self, start_sq, target_sq, piece_moved, piece_captured=None, is_enpasant=False, is_castling=False, is_promotion=False, promotion_piece=None):
+    def __init__(self, start_sq, target_sq, piece_moved, piece_captured=None, is_enpassant=False, is_castling=False, is_promotion=False, promotion_piece=None):
         self.start_sq = start_sq
         self.target_sq = target_sq
         self.piece_moved = piece_moved
         self.piece_captured = piece_captured
         self.move_id = start_sq * 100 + target_sq
-        self.is_enpassant = is_enpasant
+        self.is_enpassant = is_enpassant
         self.is_castling = is_castling
         self.is_promotion = is_promotion
         self.promotion_piece = promotion_piece
