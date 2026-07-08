@@ -2,9 +2,9 @@ import pygame
 import sys
 import random
 from src import config
-from src.ui.renderer import BoardRenderer
-from src.engine.chess_engine import GameState, Move
-from src.engine.ai_engine import find_best_move
+from src.matrix.ui.renderer import BoardRenderer
+from src.matrix.engine.chess_engine import GameState, Move
+from src.matrix.engine.ai_engine import find_best_move
 
 def main():
     pygame.init()
