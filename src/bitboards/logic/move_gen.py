@@ -1,6 +1,6 @@
-from src.logic.bitboard_utils import BitboardConstants
-from src.logic.magic_number import get_magic_candidate
-from src.logic import magics
+from src.bitboards.logic.bitboard_utils import BitboardConstants
+from src.bitboards.logic.magic_number import get_magic_candidate
+from src.bitboards.logic import magics
 
 class AttackTables:
     mask = 0xFFFFFFFFFFFFFFFF

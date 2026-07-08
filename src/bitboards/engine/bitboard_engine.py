@@ -1,5 +1,5 @@
-from src.logic import board, bitboard_utils, move_gen
-from src.logic.adapter import to_matrix
+from src.bitboards.logic import board, bitboard_utils, move_gen
+from src.bitboards.logic.adapter import to_matrix
 from collections import Counter
 
 class BitboardEngine:
@@ -24,6 +24,7 @@ class BitboardEngine:
         self.prev_en_passant_sq = -1
         self.move_log = []
         self.in_check_flag = False
+        self.position_history = []
 
         #Game state
         self.board = to_matrix(self.new_board)
@@ -100,15 +101,24 @@ class BitboardEngine:
         if len(moves) == 0:
             if self.in_check_flag:
                 self.checkmate = True
+                self.move_log[-1].is_mate = True
             else:
                 self.stealmate = True
         else:
             self.checkmate = False
             self.stealmate = False
+            if self.position_history.count(self.get_position_hash()) >= 3 or self.check_insufficient_material():
+                self.stealmate = True
+        if not self.checkmate and self.in_check() and len(moves) > 0:
+            self.move_log[-1].is_check = True
 
     #Vizualize board method
     def draw_board(self):
         return self.new_board.display_board()
+
+    def get_position_hash(self):
+        nb = self.new_board
+        return (nb.white_pawns, nb.white_rooks, nb.white_knights, nb.white_bishops, nb.white_queen, nb.white_king, nb.black_pawns, nb.black_rooks, nb.black_knights, nb.black_bishops, nb.black_queen, nb.black_king, self.white_to_move)
 
     #Method to make a move on the board
     def make_move(self, move):
@@ -180,6 +190,7 @@ class BitboardEngine:
         #Changing turn and logging move
         self.move_log.append(move)
         self.white_to_move = not self.white_to_move
+        self.position_history.append(self.get_position_hash())
         self.new_board._update_occupancy()
 
         self.board = to_matrix(self.new_board)
@@ -237,6 +248,8 @@ class BitboardEngine:
             
             self.new_board._update_occupancy()
             self.board = to_matrix(self.new_board)
+            if len(self.position_history) > 0:
+                self.position_history.pop()
             self._update_game_status()
 
     #Function to get the square of the king for the current player
@@ -303,12 +316,23 @@ class BitboardEngine:
             self.in_check_flag = True
             checker_square = check_ers.bit_length() - 1
             checker_bit = 1 << checker_square
-            ray_from_king = self.attack_tables.get_queen_attacks(king_square, all_occ)
-            ray_from_checker = self.attack_tables.get_queen_attacks(checker_square, all_occ)
-            check_mask = ray_from_king & ray_from_checker | checker_bit
+            if checker_bit & (enemy_knight | enemy_pawns):
+                check_mask = checker_bit
+            else:
+                is_rook_type = ((checker_bit & enemy_rooks) or (checker_bit & enemy_queen)) and ((king_square // 8 == checker_square // 8) or (king_square % 8 == checker_square % 8))
+                if is_rook_type:
+                    ray_from_king = self.attack_tables.get_rook_attacks(king_square, all_occ)
+                    ray_from_checker = self.attack_tables.get_rook_attacks(checker_square, all_occ)
+                else:
+                    ray_from_king = self.attack_tables.get_bishop_attacks(king_square, all_occ)
+                    ray_from_checker = self.attack_tables.get_bishop_attacks(checker_square, all_occ)
+                check_mask = ray_from_king & ray_from_checker | checker_bit
         else:
             self.in_check_flag = True
             check_mask = 0
+
+        if self.in_check_flag:
+            bitboard_utils.BitboardConstants.print_bitboard(check_mask)
         
         #Getting our pieces based on the current player
         if self.white_to_move:
@@ -388,6 +412,7 @@ class BitboardEngine:
             enemy_bishops = self.new_board.black_bishops
             enemy_queen = self.new_board.black_queen
             enemy_pawns = self.new_board.black_pawns
+            enemy_king = self.new_board.black_king
             enemy_pieces = self.new_board.black_pieces
         else:
             our_pieces = self.new_board.black_pieces
@@ -401,9 +426,13 @@ class BitboardEngine:
             enemy_bishops = self.new_board.white_bishops
             enemy_queen = self.new_board.white_queen
             enemy_pawns = self.new_board.white_pawns
+            enemy_king = self.new_board.white_king
             enemy_pieces = self.new_board.white_pieces
 
+        out_king_sq = self.get_king_square(self.white_to_move)
+        our_king_bit = 1 << out_king_sq if out_king_sq != -1 else 0
         all_occ = self.new_board.all_pieces
+        all_occ_minus_king = self.new_board.all_pieces & ~our_king_bit
         enemy_attacks = 0
         
         #Calculating enemy attacks based on the enemy pieces and their attack patterns
@@ -411,6 +440,7 @@ class BitboardEngine:
         temp_rooks = enemy_rooks
         temp_bishops = enemy_bishops
         temp_queen = enemy_queen
+        temp_king = enemy_king
 
         #Calculating enemy attacks for knights, rooks, bishops, and queens
         while temp_knights:
@@ -419,16 +449,20 @@ class BitboardEngine:
             temp_knights &= temp_knights - 1
         while temp_rooks:
             sq = (temp_rooks & -temp_rooks).bit_length() - 1
-            enemy_attacks |= self.attack_tables.get_rook_attacks(sq, all_occ)
+            enemy_attacks |= self.attack_tables.get_rook_attacks(sq, all_occ_minus_king)
             temp_rooks &= temp_rooks - 1
         while temp_bishops:
             sq = (temp_bishops & -temp_bishops).bit_length() - 1
-            enemy_attacks |= self.attack_tables.get_bishop_attacks(sq, all_occ)
+            enemy_attacks |= self.attack_tables.get_bishop_attacks(sq, all_occ_minus_king)
             temp_bishops &= temp_bishops - 1
         while temp_queen:
             sq = (temp_queen & -temp_queen).bit_length() - 1
-            enemy_attacks |= self.attack_tables.get_queen_attacks(sq, all_occ)
+            enemy_attacks |= self.attack_tables.get_queen_attacks(sq, all_occ_minus_king)
             temp_queen &= temp_queen - 1
+        while temp_king:
+            sq = (temp_king & -temp_king).bit_length() - 1
+            enemy_attacks |= self.attack_tables.KING_ATTACKS[sq]
+            temp_king &= temp_king - 1
 
         #Calculating enemy pawn attacks based on the current player's turn
         if self.white_to_move:
@@ -447,7 +481,7 @@ class BitboardEngine:
         k_char = "K" if self.white_to_move else "k"
 
         #All pieces are considered for generating legal moves, but only if the king is not in check or if there is a single checker. If there are multiple checkers, only king moves are generated.
-        if check_mask != 0:
+        if check_mask != 0 or not self.in_check_flag:
             #Generating legal moves for knights
             temp_our_knights = our_knights
             while temp_our_knights:
@@ -538,6 +572,8 @@ class BitboardEngine:
                             capture = self.get_captured_piece(target_bit)
                             if target_bit & promotion_rank_mask:
                                 for piece in ["Q", "R", "B", "N"]:
+                                    if not self.white_to_move:
+                                        piece = piece.lower()
                                     moves.append(Move(sq, target_sq, piece_moved=p_char, piece_captured=capture, is_promotion=True, promotion_piece=piece))
                             else:
                                 moves.append(Move(sq, target_sq, piece_moved=p_char, piece_captured=capture))
@@ -592,6 +628,9 @@ class Move:
         self.is_castling = is_castling
         self.is_promotion = is_promotion
         self.promotion_piece = promotion_piece
+        self.is_check = False
+        self.is_mate = False
+
     def __eq__(self, other):
         if isinstance(other, Move):
             return self.move_id == other.move_id
@@ -600,6 +639,30 @@ class Move:
     def __str__(self):
         return self.cols_to_files[self.start_sq % 8] + self.rows_to_ranks[self.start_sq // 8] + self.cols_to_files[self.target_sq % 8] + self.rows_to_ranks[self.target_sq // 8]
 
+    def get_chess_notation(self):
+        if hasattr(self, 'is_castling') and self.is_castling:
+            return "O-O" if self.target_sq % 8 == 6 else "O-O-O"
+        else:    
+            names = {"p": "", "q": "Q", "r" : "R", "b": "B", "n" : "N", "k" : "K"}
+            piece = self.piece_moved.lower()
+            prefix = names.get(piece, "")
+
+            if piece == "p" and self.piece_captured != None:
+                prefix = self.cols_to_files[self.start_sq % 8] + "x"
+            elif self.piece_captured != None:
+                prefix += "x"
+
+            notation = prefix + self.get_rank_file(self.target_sq // 8, self.target_sq % 8)
+
+        if self.is_mate:
+            notation += "#"
+        elif self.is_check:
+            notation += "+"
+
+        return notation
+
+    def get_rank_file(self, r, c):
+        return self.cols_to_files[c] + self.rows_to_ranks[r]
 
 if __name__ == "__main__":
     engine = BitboardEngine()

@@ -1,4 +1,4 @@
-from src.logic.bitboard_utils import BitboardConstants
+from src.bitboards.logic.bitboard_utils import BitboardConstants
 
 class Board:
     def __init__(self):
