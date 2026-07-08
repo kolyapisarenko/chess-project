@@ -2,11 +2,11 @@ import pygame
 import sys
 import random
 from src import config
-from src.ui.bitboard_renderer import BoardRenderer
-from src.logic.adapter import to_matrix, to_bitboard
-from src.logic.board import Board
-from src.engine.bitboard_engine import BitboardEngine, Move
-from src.engine.ai_engine import find_best_move
+from src.bitboards.ui.bitboard_renderer import BoardRenderer
+from src.bitboards.logic.adapter import to_matrix, to_bitboard
+from src.bitboards.logic.board import Board
+from src.bitboards.engine.bitboard_engine import BitboardEngine, Move
+from src.bitboards.engine.ai_engine import find_best_move
 
 def main():
     pygame.init()
