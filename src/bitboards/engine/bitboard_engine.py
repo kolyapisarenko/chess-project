@@ -216,7 +216,11 @@ class BitboardEngine:
                 promoted_attr = self.new_board.piece_map[p_piece]
                 setattr(self.new_board, promoted_attr, getattr(self.new_board, promoted_attr) ^ (1 << t_arget))
                 moved_attr = self.new_board.piece_map[move.piece_moved]
-                setattr(self.new_board, moved_attr, getattr(self.new_board, moved_attr) ^ (1 << t_arget))
+                setattr(self.new_board, moved_attr, getattr(self.new_board, moved_attr) ^ (1 << s_square))
+            else:
+                move_mask = (1 << s_square) | (1 << t_arget)
+                moved_attr = self.new_board.piece_map[move.piece_moved]
+                setattr(self.new_board, moved_attr, getattr(self.new_board, moved_attr) ^ move_mask)
 
             #Reverting the captured piece back to its original square
             if move.is_castling:
@@ -234,9 +238,6 @@ class BitboardEngine:
                     self.new_board.black_rooks ^= rook_mask
 
             #Updating bitboards for moved piece and captured piece via XOR with same mask
-            move_mask = (1 << s_square) | (1 << t_arget)
-            moved_attr = self.new_board.piece_map[move.piece_moved]
-            setattr(self.new_board, moved_attr, getattr(self.new_board, moved_attr) ^ move_mask)
             if move.piece_captured:
                 if move.is_enpassant:
                     ep_capture_sq = t_arget - 8 if self.white_to_move else t_arget + 8
@@ -331,8 +332,9 @@ class BitboardEngine:
             self.in_check_flag = True
             check_mask = 0
 
-        if self.in_check_flag:
-            bitboard_utils.BitboardConstants.print_bitboard(check_mask)
+        #Debugging check mask error
+        #if self.in_check_flag:
+        #    bitboard_utils.BitboardConstants.print_bitboard(check_mask)
         
         #Getting our pieces based on the current player
         if self.white_to_move:
@@ -341,28 +343,33 @@ class BitboardEngine:
             our_pieces = self.new_board.black_pieces
         enemy_pieces = (enemy_knight | enemy_rooks | enemy_bishops | enemy_pawns | enemy_queen)
 
-        #Calculating pins for rooks
+        # Calculating pins for rooks
         rook_xray = self.attack_tables.get_rook_attacks(king_square, enemy_pieces)
         pinners_flat = rook_xray & (enemy_rooks | enemy_queen)
         while pinners_flat:
             pinner_sq = (pinners_flat & -pinners_flat).bit_length() - 1
-            line = (self.attack_tables.get_rook_attacks(king_square, all_occ) & self.attack_tables.get_rook_attacks(pinner_sq, all_occ)) | (1 << pinner_sq)
-            our_pieces_on_line = line & our_pieces
+            line_simple = (self.attack_tables.get_rook_attacks(king_square, all_occ) & self.attack_tables.get_rook_attacks(pinner_sq, all_occ)) | (1 << pinner_sq)
+            our_pieces_on_line = line_simple & our_pieces
+            
             if bin(our_pieces_on_line).count("1") == 1:
                 pinned_sq = our_pieces_on_line.bit_length() - 1
-                pin_mask[pinned_sq] = line
+                all_occ_without_pinned = all_occ & ~(1 << pinned_sq)
+                full_line = (self.attack_tables.get_rook_attacks(king_square, all_occ_without_pinned) & self.attack_tables.get_rook_attacks(pinner_sq, all_occ_without_pinned)) | (1 << pinner_sq) | (1 << pinned_sq)
+                pin_mask[pinned_sq] = full_line   
             pinners_flat ^= 1 << pinner_sq
 
-        #Calculating pins for bishops
+        # Calculating pins for bishops
         bishop_xray = self.attack_tables.get_bishop_attacks(king_square, enemy_pieces)
         pinners_flat = bishop_xray & (enemy_bishops | enemy_queen)
         while pinners_flat:
             pinner_sq = (pinners_flat & -pinners_flat).bit_length() - 1
-            line = (self.attack_tables.get_bishop_attacks(king_square, all_occ) & self.attack_tables.get_bishop_attacks(pinner_sq, all_occ)) | (1 << pinner_sq)
-            our_pieces_on_line = line & our_pieces
+            line_simple = (self.attack_tables.get_bishop_attacks(king_square, all_occ) & self.attack_tables.get_bishop_attacks(pinner_sq, all_occ)) | (1 << pinner_sq)
+            our_pieces_on_line = line_simple & our_pieces
             if bin(our_pieces_on_line).count("1") == 1:
                 pinned_sq = our_pieces_on_line.bit_length() - 1
-                pin_mask[pinned_sq] = line
+                all_occ_without_pinned = all_occ & ~(1 << pinned_sq)
+                full_line = (self.attack_tables.get_bishop_attacks(king_square, all_occ_without_pinned) & self.attack_tables.get_bishop_attacks(pinner_sq, all_occ_without_pinned)) | (1 << pinner_sq) | (1 << pinned_sq)
+                pin_mask[pinned_sq] = full_line
             pinners_flat ^= 1 << pinner_sq
 
         return check_mask, pin_mask
@@ -555,16 +562,29 @@ class BitboardEngine:
                     cap_left_sq = sq - 9 if (pawn_bit & bitboard_utils.BitboardConstants.NOT_A_FILE) else -1
                     cap_right_sq = sq - 7 if (pawn_bit & bitboard_utils.BitboardConstants.NOT_H_FILE) else -1
 
+                is_pinned = pin_mask[sq] != 0xFFFFFFFFFFFFFFFF
+                is_vertical_pin = is_pinned and (out_king_sq % 8 == sq % 8) and (self.attack_tables.get_rook_attacks(out_king_sq, 0) & pin_mask[sq])
+
                 if not (all_occ & (1 << forward_one)):
-                    if (1 << forward_one) & check_mask & pin_mask[sq]:
+                    is_pawn_push_legal = (1 << forward_one) & check_mask
+                    if not is_vertical_pin:
+                        is_pawn_push_legal &= pin_mask[sq]
+
+                    if is_pawn_push_legal:
                         if (1 << forward_one) & promotion_rank_mask:
                             for piece in ["Q", "R", "B", "N"]:
                                 moves.append(Move(sq, forward_one, piece_moved=p_char, piece_captured=None, is_promotion=True, promotion_piece=piece))
                         else:
                             moves.append(Move(sq, forward_one, piece_moved=p_char, piece_captured=None))
+                    
                     if (pawn_bit & start_rank_mask) and not (all_occ & (1 << forward_two)):
-                        if (1 << forward_two) & check_mask & pin_mask[sq]:
+                        is_double_push_legal = (1 << forward_two) & check_mask
+                        if not is_vertical_pin:
+                            is_double_push_legal &= pin_mask[sq]
+
+                        if is_double_push_legal:
                             moves.append(Move(sq, forward_two, piece_moved=p_char, piece_captured=None))
+
                 for target_sq in [cap_left_sq, cap_right_sq]:
                     if target_sq != -1:
                         target_bit = 1 << target_sq
