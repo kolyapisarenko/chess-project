@@ -110,7 +110,8 @@ class BitboardEngine:
             if self.position_history.count(self.get_position_hash()) >= 3 or self.check_insufficient_material():
                 self.stealmate = True
         if not self.checkmate and self.in_check() and len(moves) > 0:
-            self.move_log[-1].is_check = True
+            if self.move_log:
+                self.move_log[-1].is_check = True
 
     #Vizualize board method
     def draw_board(self):
@@ -598,7 +599,20 @@ class BitboardEngine:
                             else:
                                 moves.append(Move(sq, target_sq, piece_moved=p_char, piece_captured=capture))
                         elif target_sq == self.en_passant_sq:
-                            moves.append(Move(sq, target_sq, piece_moved=p_char, piece_captured="p" if self.white_to_move else "P", is_enpassant=True))
+                            ep_capture_sq = target_sq - 8 if self.white_to_move else target_sq + 8
+                            ep_capture_bit = 1 << ep_capture_sq
+                            if target_bit & check_mask:
+                                occ_after = (all_occ & ~pawn_bit & ~ep_capture_bit) | target_bit
+
+                                if out_king_sq != -1:
+                                    danger_rook = self.attack_tables.get_rook_attacks(out_king_sq, occ_after) & (enemy_rooks | enemy_queen)
+                                    danger_bishop = self.attack_tables.get_bishop_attacks(out_king_sq, occ_after) & (enemy_bishops | enemy_queen)
+                                    danger = danger_rook | danger_bishop
+                                else:
+                                    danger = 0
+
+                                if not danger:
+                                    moves.append(Move(sq, target_sq, piece_moved=p_char, piece_captured="p" if self.white_to_move else "P", is_enpassant=True))
 
                 temp_our_pawns &= temp_our_pawns - 1
 
