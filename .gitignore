@@ -11,3 +11,6 @@ venv/
 #IDE files
 .vscode/
 .idea/
+
+#Database fale
+*.db
