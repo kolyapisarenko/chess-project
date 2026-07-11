@@ -33,6 +33,35 @@ def find_best_move(gs, depth = 4):
 
     return best_move
 
+def get_scored_moves(gs, depth=4):
+    result = []
+    best_score = None
+    turn = gs.white_to_move
+    if turn:
+        best_score = float("-inf")
+    else:
+        best_score = float("inf")
+    moves = gs.get_valid_moves()
+    moves.sort(key=score_moves, reverse=True)
+
+    alpha = float("-inf")
+    beta = float("inf")
+
+    for move in moves:
+        gs.make_move(move)
+        score = minimax(gs, not turn, depth - 1, alpha, beta)
+        gs.undo_move()
+        if turn:
+            if score > best_score:
+                best_score = score
+            alpha = max(alpha, best_score)
+        else:
+            if score < best_score:
+                best_score = score
+            beta = min(beta, best_score)
+        result.append((move, score))
+    return result
+
 def score_moves(move):
     bonus = 0
     if move.piece_captured != None:
