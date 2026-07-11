@@ -300,14 +300,22 @@ class BitboardEngine:
         king_bit = 1 << king_square
         if self.white_to_move:
             if king_bit & bitboard_utils.BitboardConstants.NOT_H_FILE:
-                pawn_attacks |= 1 << (king_square + 9) & move_gen.AttackTables.mask
+                idx = king_square + 9
+                if idx <= 63:
+                    pawn_attacks |= (1 << idx) & move_gen.AttackTables.mask
             if king_bit & bitboard_utils.BitboardConstants.NOT_A_FILE:
-                pawn_attacks |= 1 << (king_square + 7) & move_gen.AttackTables.mask
+                idx = king_square + 7
+                if idx <= 63:
+                    pawn_attacks |= (1 << idx) & move_gen.AttackTables.mask
         else:
             if king_bit & bitboard_utils.BitboardConstants.NOT_A_FILE:
-                pawn_attacks |= 1 << (king_square - 9) & move_gen.AttackTables.mask
+                idx = king_square - 9
+                if idx >= 0:
+                    pawn_attacks |= (1 << idx) & move_gen.AttackTables.mask
             if king_bit & bitboard_utils.BitboardConstants.NOT_H_FILE:
-                pawn_attacks |= 1 << (king_square - 7) & move_gen.AttackTables.mask
+                idx = king_square - 7
+                if idx >= 0:
+                    pawn_attacks |= (1 << idx) & move_gen.AttackTables.mask
         check_ers |= pawn_attacks & enemy_pawns
 
         #Counting the number of checkers and updating the in_check status and check_mask accordingly
