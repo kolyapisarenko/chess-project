@@ -76,23 +76,31 @@ def play_single_game(depth=4, epsilon=0.1):
     log_game_to_db(game_id, position_hashes, final_result)
     return final_result
 
-def play_chess_game_worker(worker_id, depth=4, epsilon=0.1):
-    print(f"[Worker {worker_id}] is running. Start genering 10 games on depth {depth}...")
+def play_chess_game_worker(worker_id, depth=2, epsilon=0.1):
+    print(f"[Worker {worker_id}] target hit started! Target: 358 games (mixed depth 2, 3 and 4).")
     game_counter = 1
-    while True:
+    
+    while game_counter <= 358:
+        if game_counter <= 300:
+            current_depth = 2
+        elif game_counter <= 355:
+            current_depth = 3
+        else:
+            current_depth = 4
+
         gs = bitboard_engine.BitboardEngine()
         game_id = str(uuid.uuid4())
         position_hashes = []
 
         half_move_counter = 0
         max_random_half_moves = 8
-
         last_time = time.time() * 1000
 
         while not (gs.checkmate or gs.stealmate or gs.on_time or gs.check_insufficient_material()):
             current_time = time.time() * 1000
             delta_time = current_time - last_time
             last_time = current_time
+            
             if gs.white_to_move:
                 gs.white_time -= delta_time
             else:
@@ -113,10 +121,11 @@ def play_chess_game_worker(worker_id, depth=4, epsilon=0.1):
             if half_move_counter < max_random_half_moves:
                 chosen_move = random.choice(legal_moves)
             else:
-                chosen_move = select_move(gs, depth, epsilon)
+                chosen_move = select_move(gs, current_depth, epsilon)
 
             gs.make_move(chosen_move)
             half_move_counter += 1
+            
         final_result = 0.0
         if gs.checkmate:
             final_result = -1.0 if gs.white_to_move else 1.0
@@ -124,19 +133,18 @@ def play_chess_game_worker(worker_id, depth=4, epsilon=0.1):
             final_result = -1.0 if gs.white_time <= 0 else 1.0
 
         log_game_to_db(game_id, position_hashes, final_result)
-        if game_counter == 200:
-            break
-        print(f"[Worker {worker_id}] ended game №{game_counter}/10. Result: {final_result}. Added into db.")
-        game_counter += 1
         
+        print(f"[Worker {worker_id}] finished game №{game_counter}/358 (Depth {current_depth}). Result: {final_result}. Added to DB.")
+        game_counter += 1
 
+    print(f"[Worker {worker_id}] Daily quota completed successfully!")
+        
 if __name__ == "__main__":
     NUM_CORES = 2
-    TARGET_DEPTH = 3
     processes = []
     init_db()
     for i in range(NUM_CORES):
-        p = multiprocessing.Process(target=play_chess_game_worker, args=(i, TARGET_DEPTH))
+        p = multiprocessing.Process(target=play_chess_game_worker, args=(i,))
         processes.append(p)
         p.start()
     try:
